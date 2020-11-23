@@ -22,6 +22,8 @@ void setup()
   String thisBoard = ARDUINO_BOARD;
   Serial.println(thisBoard);
 
+  // Wait for DHT22 to power up.
+  delay(2000);
   dht.setup(D4, DHTesp::DHT22);
 
   ThingSpeak.begin(client); //Initialize ThingSpeak
