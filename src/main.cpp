@@ -54,7 +54,7 @@ void loop()
     const float humidity = dhtReading.humidity;
     const float heatIndex = dht.computeHeatIndex(temperatureF, humidity, true);
 
-    Serial.printf("Temperature(F): %f.1\tHumidity: %f.1\tHeat Index: %f.1\n",
+    Serial.printf("Temperature(F): %.1f\tHumidity: %.1f\tHeat Index: %.1f\n",
                   temperatureF, humidity, heatIndex);
     // Connect or reconnect to WiFi
     if (WiFi.status() != WL_CONNECTED)
