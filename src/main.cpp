@@ -162,14 +162,14 @@ void loop()
       if (!reconnect())
       {
         //Unable to reconnect to mqtt server. Retry from begining.
-        Serial.print("Unable to reconnect to mqtt server.");
+        Serial.println("Unable to reconnect to mqtt server.");
         delay(2000);
         continue;
       }
     }
     if (!publishReadings(temperatureF, humidity, heatIndex))
     {
-      Serial.print("Unable to publish readings.");
+      Serial.println("Unable to publish readings.");
     }
     else
     {
