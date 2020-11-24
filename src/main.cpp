@@ -106,7 +106,7 @@ void loop()
 {
   while (true)
   {
-      // Wait for next update cycle.
+    // Wait for next update cycle.
     auto timeDifference = millis() - lastCycleTime;
     if (timeDifference < PERIOD_TIME_MS)
     {
@@ -117,7 +117,7 @@ void loop()
     WiFi.forceSleepWake();
     waitWhileConnecting();
 
-    wl_status_t wifiStatus = WiFi.status();
+    auto wifiStatus = WiFi.status();
     if (wifiStatus != WL_CONNECTED)
     {
       for (int retry = 0; retry < 5; retry++)
@@ -142,8 +142,8 @@ void loop()
     }
 
     lastCycleTime = millis();
-    TempAndHumidity dhtReading = dht.getTempAndHumidity();
-    DHTesp::DHT_ERROR_t dhtStatus = dht.getStatus();
+    auto dhtReading = dht.getTempAndHumidity();
+    auto dhtStatus = dht.getStatus();
 
     if (dhtStatus != DHTesp::DHT_ERROR_t::ERROR_NONE)
     {
@@ -153,9 +153,9 @@ void loop()
       continue;
     }
 
-    const float temperatureF = dht.toFahrenheit(dhtReading.temperature);
-    const float humidity = dhtReading.humidity;
-    const float heatIndex = dht.computeHeatIndex(temperatureF, humidity, true);
+    const auto temperatureF = dht.toFahrenheit(dhtReading.temperature);
+    const auto humidity = dhtReading.humidity;
+    const auto heatIndex = dht.computeHeatIndex(temperatureF, humidity, true);
 
     if (!mqttClient.connected())
     {
