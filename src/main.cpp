@@ -34,7 +34,6 @@ bool reconnect()
   // Loop until reconnected.
   for (int retry = 0; retry < 5; retry++)
   {
-    Serial.print("Attempting MQTT connection...");
     // Generate ClientID
     for (int i = 0; i < 8; i++)
     {
@@ -45,7 +44,6 @@ bool reconnect()
     // Connect to the MQTT broker.
     if (mqttClient.connect(clientID, mqttUserName, mqttPass))
     {
-      Serial.println("connected");
       ret = true;
       break;
     }
@@ -62,7 +60,7 @@ bool reconnect()
   return ret;
 }
 
-void publishReadings(const float &temperatureF, const float &humdity, const float &heatIndex)
+bool publishReadings(const float &temperatureF, const float &humdity, const float &heatIndex)
 {
   // Create data string to send to ThingSpeak.
   String data = String("field1=") + String(temperatureF, 1) + "&field2=" + String(humdity, 2) + "&field3=" + String(heatIndex, 2);
@@ -74,8 +72,9 @@ void publishReadings(const float &temperatureF, const float &humdity, const floa
   String topicString = "channels/" + String(myChannelNumber) + "/publish/" + String(myWriteAPIKey);
   const char *topicBuffer;
   topicBuffer = topicString.c_str();
-  mqttClient.publish(topicBuffer, msgBuffer);
+  bool ret = mqttClient.publish(topicBuffer, msgBuffer);
   delay(100); // Ensure packet has been written
+  return ret;
 }
 
 void setup()
@@ -94,6 +93,15 @@ void setup()
   delay(2000);
 }
 
+void waitWhileConnecting()
+{
+  do
+  {
+    Serial.print(".");
+    delay(100);
+  } while (wifi_station_get_connect_status() == STATION_CONNECTING);
+}
+
 void loop()
 {
   while (true)
@@ -101,14 +109,13 @@ void loop()
     wl_status_t wifiStatus = WiFi.status();
     if (wifiStatus != WL_CONNECTED)
     {
-      Serial.print("Connecting to Wifi..");
       for (int retry = 0; retry < 5; retry++)
       {
+        Serial.print(" . ");
         WiFi.mode(WiFiMode_t::WIFI_STA);
         WiFi.begin();
-        delay(5000); //Give time to connect
+        waitWhileConnecting();
         wifiStatus = WiFi.status();
-        Serial.printf("%d.", (int)wifiStatus);
         if (wifiStatus == WL_CONNECTED)
         {
           break;
@@ -121,8 +128,6 @@ void loop()
         continue;
       }
     }
-    String ssid_r = WiFi.SSID();
-    Serial.printf(" Connected! (%s)\n", ssid_r.c_str());
 
     lastDhtReadTime = millis();
     TempAndHumidity dhtReading = dht.getTempAndHumidity();
@@ -140,19 +145,25 @@ void loop()
     const float humidity = dhtReading.humidity;
     const float heatIndex = dht.computeHeatIndex(temperatureF, humidity, true);
 
-    Serial.printf("Temperature(F): %.1f\tHumidity: %.1f\tHeat Index: %.1f\n",
-                  temperatureF, humidity, heatIndex);
-
     if (!mqttClient.connected())
       {
     if (!reconnect())
     {
       //Unable to reconnect to mqtt server. Retry from begining.
+        Serial.print("Unable to reconnect to mqtt server.");
       delay(2000);
       continue;
     }
     }
-    publishReadings(temperatureF, humidity, heatIndex);
+    if (!publishReadings(temperatureF, humidity, heatIndex))
+    {
+      Serial.print("Unable to publish readings.");
+    }
+    else
+    {
+      Serial.printf("Temperature(F): %.1f\tHumidity: %.1f\tHeat Index: %.1f\n",
+                    temperatureF, humidity, heatIndex);
+    }
 
     // Wait for next update cycle.
     delay(60000L);
