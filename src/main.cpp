@@ -165,7 +165,15 @@ void loop()
                     temperatureF, humidity, heatIndex);
     }
 
+    if (!WiFi.forceSleepBegin())
+    {
+      Serial.println("Force sleep failed");
+    }
+
     // Wait for next update cycle.
     delay(60000L);
+
+    WiFi.forceSleepWake();
+    waitWhileConnecting();
   }
 }
