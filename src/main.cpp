@@ -66,14 +66,12 @@ void publishReadings(const float &temperatureF, const float &humdity, const floa
 {
   // Create data string to send to ThingSpeak.
   String data = String("field1=") + String(temperatureF, 1) + "&field2=" + String(humdity, 2) + "&field3=" + String(heatIndex, 2);
-  int length = data.length();
   const char *msgBuffer;
   msgBuffer = data.c_str();
   Serial.println(msgBuffer);
 
   // Create a topic string and publish data to ThingSpeak channel feed.
   String topicString = "channels/" + String(myChannelNumber) + "/publish/" + String(myWriteAPIKey);
-  length = topicString.length();
   const char *topicBuffer;
   topicBuffer = topicString.c_str();
   mqttClient.publish(topicBuffer, msgBuffer);
