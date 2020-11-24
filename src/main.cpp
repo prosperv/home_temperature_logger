@@ -97,6 +97,32 @@ void loop()
 {
   while (true)
   {
+    wl_status_t wifiStatus = WiFi.status();
+    if (wifiStatus != WL_CONNECTED)
+    {
+      Serial.print("Connecting to Wifi..");
+      for (int retry = 0; retry < 5; retry++)
+      {
+        WiFi.mode(WiFiMode_t::WIFI_STA);
+        WiFi.begin();
+        delay(5000); //Give time to connect
+        wifiStatus = WiFi.status();
+        Serial.printf("%d.", (int)wifiStatus);
+        if (wifiStatus == WL_CONNECTED)
+        {
+          break;
+        }
+        delay(500);
+      }
+      if (wifiStatus != WL_CONNECTED)
+      {
+        Serial.printf("Failed to connect to wifi: %d\n", (int)wifiStatus);
+        continue;
+      }
+    }
+    String ssid_r = WiFi.SSID();
+    Serial.printf(" Connected! (%s)\n", ssid_r.c_str());
+
     lastDhtReadTime = millis();
     TempAndHumidity dhtReading = dht.getTempAndHumidity();
     DHTesp::DHT_ERROR_t dhtStatus = dht.getStatus();
@@ -115,26 +141,15 @@ void loop()
 
     Serial.printf("Temperature(F): %.1f\tHumidity: %.1f\tHeat Index: %.1f\n",
                   temperatureF, humidity, heatIndex);
-    // Connect or reconnect to WiFi
-    if (WiFi.status() != WL_CONNECTED)
-    {
-      Serial.print("Attempting to connect to SSID: ");
-      Serial.println(SECRET_SSID);
-      WiFi.begin(ssid, pass); // Connect to WPA/WPA2 network. Change this line if using open or WEP network
-      if (WiFi.status() != WL_CONNECTED)
-      {
-        Serial.println("Failed to connect to wifi.");
-        delay(4000);
-        continue;
-      }
-      Serial.println("\nConnected.");
-    }
 
+    if (!mqttClient.connected())
+      {
     if (!reconnect())
     {
       //Unable to reconnect to mqtt server. Retry from begining.
       delay(2000);
       continue;
+    }
     }
     publishReadings(temperatureF, humidity, heatIndex);
 
