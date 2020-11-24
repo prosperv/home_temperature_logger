@@ -24,7 +24,8 @@ static const char alphanum[] = "0123456789"
                                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                                "abcdefghijklmnopqrstuvwxyz"; // For random generation of client ID.
 
-unsigned long lastDhtReadTime = 0;
+unsigned long lastCycleTime = 0;
+const unsigned long PERIOD_TIME_MS = 60000L;
 
 bool reconnect()
 {
@@ -66,7 +67,6 @@ bool publishReadings(const float &temperatureF, const float &humdity, const floa
   String data = String("field1=") + String(temperatureF, 1) + "&field2=" + String(humdity, 2) + "&field3=" + String(heatIndex, 2);
   const char *msgBuffer;
   msgBuffer = data.c_str();
-  Serial.println(msgBuffer);
 
   // Create a topic string and publish data to ThingSpeak channel feed.
   String topicString = "channels/" + String(myChannelNumber) + "/publish/" + String(myWriteAPIKey);
@@ -106,6 +106,17 @@ void loop()
 {
   while (true)
   {
+      // Wait for next update cycle.
+    auto timeDifference = millis() - lastCycleTime;
+    if (timeDifference < PERIOD_TIME_MS)
+    {
+      delay(PERIOD_TIME_MS / 20);
+      continue;
+    }
+
+    WiFi.forceSleepWake();
+    waitWhileConnecting();
+
     wl_status_t wifiStatus = WiFi.status();
     if (wifiStatus != WL_CONNECTED)
     {
@@ -125,11 +136,12 @@ void loop()
       if (wifiStatus != WL_CONNECTED)
       {
         Serial.printf("Failed to connect to wifi: %d\n", (int)wifiStatus);
+        delay(2000);
         continue;
       }
     }
 
-    lastDhtReadTime = millis();
+    lastCycleTime = millis();
     TempAndHumidity dhtReading = dht.getTempAndHumidity();
     DHTesp::DHT_ERROR_t dhtStatus = dht.getStatus();
 
@@ -146,14 +158,14 @@ void loop()
     const float heatIndex = dht.computeHeatIndex(temperatureF, humidity, true);
 
     if (!mqttClient.connected())
-      {
-    if (!reconnect())
     {
-      //Unable to reconnect to mqtt server. Retry from begining.
+      if (!reconnect())
+      {
+        //Unable to reconnect to mqtt server. Retry from begining.
         Serial.print("Unable to reconnect to mqtt server.");
-      delay(2000);
-      continue;
-    }
+        delay(2000);
+        continue;
+      }
     }
     if (!publishReadings(temperatureF, humidity, heatIndex))
     {
@@ -169,11 +181,5 @@ void loop()
     {
       Serial.println("Force sleep failed");
     }
-
-    // Wait for next update cycle.
-    delay(60000L);
-
-    WiFi.forceSleepWake();
-    waitWhileConnecting();
   }
 }
