@@ -75,6 +75,7 @@ void publishReadings(const float &temperatureF, const float &humdity, const floa
   const char *topicBuffer;
   topicBuffer = topicString.c_str();
   mqttClient.publish(topicBuffer, msgBuffer);
+  delay(100); // Ensure packet has been written
 }
 
 void setup()
