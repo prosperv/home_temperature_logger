@@ -24,7 +24,11 @@ void setup()
 
   // Wait for DHT22 to power up.
   delay(2000);
+
   dht.setup(D4, DHTesp::DHT22);
+
+  WiFi.mode(WiFiMode_t::WIFI_STA);
+  WiFi.begin(ssid, pass);
 
   ThingSpeak.begin(client); //Initialize ThingSpeak
   delay(2000);
