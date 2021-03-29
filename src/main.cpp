@@ -25,7 +25,8 @@ static const char alphanum[] = "0123456789"
                                "abcdefghijklmnopqrstuvwxyz"; // For random generation of client ID.
 
 unsigned long lastCycleTime = 0;
-const unsigned long PERIOD_TIME_MS = 60000L;
+#define SECONDS_TO_MILLISECONDS(x) x * 1000L
+const unsigned long PERIOD_TIME_MS = SECONDS_TO_MILLISECONDS(60);
 
 bool reconnect()
 {
@@ -77,8 +78,18 @@ bool publishReadings(const float &temperatureF, const float &humdity, const floa
   return ret;
 }
 
+void waitWhileConnecting()
+{
+  do
+  {
+    Serial.print(".");
+    delay(100);
+  } while (wifi_station_get_connect_status() == STATION_CONNECTING);
+}
+
 void setup()
 {
+  WiFi.setSleepMode(WIFI_MODEM_SLEEP);
   Serial.begin(115200);
   Serial.println();
   String thisBoard = ARDUINO_BOARD;
@@ -89,18 +100,60 @@ void setup()
 
   dht.setup(D1, DHTesp::DHT22);
 
+  Serial.println("Testing");
+  //Test connection
   WiFi.mode(WiFiMode_t::WIFI_STA);
+  WiFi.begin(ssid, pass);
+  waitWhileConnecting();
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    Serial.println("Wifi: OK");
+  } 
+  else
+  {
+    Serial.println("Wifi: Error");
+  }
+  
+  //Test reading DHT
+  auto dhtReading = dht.getTempAndHumidity();
+  auto dhtStatus = dht.getStatus();
+  
+  if (dhtStatus == DHTesp::DHT_ERROR_t::ERROR_NONE)
+  {
+    Serial.printf("DHT: OK (%.2f,%.2f)", dhtReading.temperature, dhtReading.humidity);
+  } 
+  else
+  {
+    Serial.printf("DHT: ERROR (%d)\n",dhtStatus);
+  }
+  
+  //Test thingspeak
+  if (!mqttClient.connected())
+  {
+    if (!reconnect())
+    {
+      //Unable to reconnect to mqtt server. Retry from begining.
+      Serial.println("Unable to reconnect to mqtt server.");
+    }
+  }
+
+  const auto temperatureF = dht.toFahrenheit(dhtReading.temperature);
+  const auto humidity = dhtReading.humidity;
+  const auto heatIndex = dht.computeHeatIndex(temperatureF, humidity, true);
+
+  if (!publishReadings(temperatureF, humidity, heatIndex))
+  {
+    Serial.println("Unable to publish readings.");
+  }
+  else
+  {
+    Serial.println("MQTT publish: OK");
+  }
+  
+  
   delay(2000);
 }
 
-void waitWhileConnecting()
-{
-  do
-  {
-    Serial.print(".");
-    delay(100);
-  } while (wifi_station_get_connect_status() == STATION_CONNECTING);
-}
 
 void loop()
 {
@@ -177,6 +230,7 @@ void loop()
                     temperatureF, humidity, heatIndex);
     }
 
+    WiFi.mode(WiFiMode_t::WIFI_OFF);
     if (!WiFi.forceSleepBegin())
     {
       Serial.println("Force sleep failed");
