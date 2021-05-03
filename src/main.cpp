@@ -5,6 +5,19 @@
 #include <PubSubClient.h>
 #include "secrets.h"
 
+#ifdef DEBUG
+#define SERIAL_BEGIN(x) Serial.begin(x)
+#define PRINT(x) Serial.print(x)
+#define PRINTLN(x) Serial.println(x)
+#define PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+#define SERIAL_BEGIN(x)
+#define PRINT(x)
+#define PRINTLN(x)
+#define PRINTF(...)
+#endif
+
+
 DHTesp dht;
 
 const char ssid[] = SECRET_SSID; //  your network SSID (name)
@@ -26,7 +39,10 @@ static const char alphanum[] = "0123456789"
 
 unsigned long lastCycleTime = 0;
 #define SECONDS_TO_MILLISECONDS(x) x * 1000L
-const unsigned long PERIOD_TIME_MS = SECONDS_TO_MILLISECONDS(60);
+#define SECONDS_TO_MICROSECONDS(x) x * 1000000L
+#define PERIOD_TIME_SECONDS 60
+const unsigned long PERIOD_TIME_MS = SECONDS_TO_MILLISECONDS(PERIOD_TIME_SECONDS);
+const unsigned long PERIOD_TIME_US = SECONDS_TO_MICROSECONDS(PERIOD_TIME_SECONDS);
 
 bool reconnect()
 {
@@ -51,11 +67,11 @@ bool reconnect()
     }
     else
     {
-      Serial.print("failed, rc=");
+      PRINT("failed, rc=");
       // Print reason the connection failed.
       // See https://pubsubclient.knolleary.net/api.html#state for the failure code explanation.
-      Serial.print(mqttClient.state());
-      Serial.println(" try again in 5 seconds");
+      PRINT(mqttClient.state());
+      PRINTLN(" try again in 5 seconds");
       delay(5000);
     }
   }
@@ -82,36 +98,37 @@ void waitWhileConnecting()
 {
   do
   {
-    Serial.print(".");
-    delay(100);
+    PRINT(".");
+    delay(1000);
   } while (wifi_station_get_connect_status() == STATION_CONNECTING);
 }
 
 void setup()
 {
   WiFi.setSleepMode(WIFI_MODEM_SLEEP);
-  Serial.begin(115200);
-  Serial.println();
+  
+  SERIAL_BEGIN(115200);
+  PRINTLN();
   String thisBoard = ARDUINO_BOARD;
-  Serial.println(thisBoard);
+  PRINTLN(thisBoard);
 
   // Wait for DHT22 to power up.
   delay(2000);
 
   dht.setup(D1, DHTesp::DHT22);
 
-  Serial.println("Testing");
+  PRINTLN("Testing");
   //Test connection
   WiFi.mode(WiFiMode_t::WIFI_STA);
   WiFi.begin(ssid, pass);
   waitWhileConnecting();
   if (WiFi.status() == WL_CONNECTED)
   {
-    Serial.println("Wifi: OK");
+    PRINTLN("Wifi: OK");
   } 
   else
   {
-    Serial.println("Wifi: Error");
+    PRINTLN("Wifi: Error");
   }
   
   //Test reading DHT
@@ -120,11 +137,11 @@ void setup()
   
   if (dhtStatus == DHTesp::DHT_ERROR_t::ERROR_NONE)
   {
-    Serial.printf("DHT: OK (%.2f,%.2f)", dhtReading.temperature, dhtReading.humidity);
+    PRINTF("DHT: OK (%.2f,%.2f)", dhtReading.temperature, dhtReading.humidity);
   } 
   else
   {
-    Serial.printf("DHT: ERROR (%d)\n",dhtStatus);
+    PRINTF("DHT: ERROR (%d)\n",dhtStatus);
   }
   
   //Test thingspeak
@@ -133,7 +150,7 @@ void setup()
     if (!reconnect())
     {
       //Unable to reconnect to mqtt server. Retry from begining.
-      Serial.println("Unable to reconnect to mqtt server.");
+      PRINTLN("Unable to reconnect to mqtt server.");
     }
   }
 
@@ -143,11 +160,11 @@ void setup()
 
   if (!publishReadings(temperatureF, humidity, heatIndex))
   {
-    Serial.println("Unable to publish readings.");
+    PRINTLN("Unable to publish readings.");
   }
   else
   {
-    Serial.println("MQTT publish: OK");
+    PRINTLN("MQTT publish: OK");
   }
   
   
@@ -163,35 +180,34 @@ void loop()
     auto timeDifference = millis() - lastCycleTime;
     if (timeDifference < PERIOD_TIME_MS)
     {
-      delay(PERIOD_TIME_MS / 20);
+      PRINT(".");
+      auto wait = max(1000UL, (PERIOD_TIME_MS - timeDifference) * 9 / 10);
+      delay(wait);
       continue;
     }
 
     WiFi.forceSleepWake();
-    waitWhileConnecting();
 
     auto wifiStatus = WiFi.status();
+    for (int retry = 0; retry < 5; retry++)
+    {
+      PRINT("-");
+      WiFi.mode(WiFiMode_t::WIFI_STA);
+      WiFi.begin();
+      waitWhileConnecting();
+      wifiStatus = WiFi.status();
+      if (wifiStatus == WL_CONNECTED)
+      {
+        break;
+      }
+      delay(1000);
+    }
     if (wifiStatus != WL_CONNECTED)
     {
-      for (int retry = 0; retry < 5; retry++)
-      {
-        Serial.print(" . ");
-        WiFi.mode(WiFiMode_t::WIFI_STA);
-        WiFi.begin();
-        waitWhileConnecting();
-        wifiStatus = WiFi.status();
-        if (wifiStatus == WL_CONNECTED)
-        {
-          break;
-        }
-        delay(500);
-      }
-      if (wifiStatus != WL_CONNECTED)
-      {
-        Serial.printf("Failed to connect to wifi: %d\n", (int)wifiStatus);
-        delay(2000);
-        continue;
-      }
+      PRINTF("Failed to connect to wifi: %d\n", (int)wifiStatus);
+      WiFi.forceSleepBegin();
+      delay(2000);
+      continue;
     }
 
     lastCycleTime = millis();
@@ -200,7 +216,7 @@ void loop()
 
     if (dhtStatus != DHTesp::DHT_ERROR_t::ERROR_NONE)
     {
-      Serial.println(dht.getStatusString());
+      PRINTLN(dht.getStatusString());
       //Try again however DHT22 needs 2 seconds between reads
       delay(2000);
       continue;
@@ -215,25 +231,25 @@ void loop()
       if (!reconnect())
       {
         //Unable to reconnect to mqtt server. Retry from begining.
-        Serial.println("Unable to reconnect to mqtt server.");
+        PRINTLN("Unable to reconnect to mqtt server.");
         delay(2000);
         continue;
       }
     }
     if (!publishReadings(temperatureF, humidity, heatIndex))
     {
-      Serial.println("Unable to publish readings.");
+      PRINTLN("Unable to publish readings.");
     }
     else
     {
-      Serial.printf("Temperature(F): %.1f\tHumidity: %.1f\tHeat Index: %.1f\n",
+      PRINTF("Temperature(F): %.1f\tHumidity: %.1f\tHeat Index: %.1f\n",
                     temperatureF, humidity, heatIndex);
     }
 
-    WiFi.mode(WiFiMode_t::WIFI_OFF);
+    // WiFi.mode(WiFiMode_t::WIFI_OFF);
     if (!WiFi.forceSleepBegin())
     {
-      Serial.println("Force sleep failed");
+      PRINTLN("Force sleep failed");
     }
   }
 }
