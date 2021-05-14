@@ -38,7 +38,10 @@ static const char alphanum[] = "0123456789"
                                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                                "abcdefghijklmnopqrstuvwxyz"; // For random generation of client ID.
 
-unsigned long lastCycleTime = 0;
+TempAndHumidity dhtReading;
+DHTesp::DHT_ERROR_t dhtStatus;
+bool gotDhtReading = false;
+
 #define SECONDS_TO_MILLISECONDS(x) x * 1000L
 #define SECONDS_TO_MICROSECONDS(x) x * 1000000L
 #define PERIOD_TIME_SECONDS 20
@@ -96,36 +99,29 @@ bool publishReadings(const float &temperatureF, const float &humdity, const floa
   return ret;
 }
 
-void waitWhileConnecting()
-{
-  do
-  {
-    PRINT(".");
-    delay(1000);
-  } while (wifi_station_get_connect_status() == STATION_CONNECTING);
-}
-
 void setup()
 {
-  WiFi.setSleepMode(WIFI_MODEM_SLEEP);
-  
+  WiFi.persistent(false); // don't store the connection each time to save wear on the flash
+  WiFi.mode(WiFiMode_t::WIFI_STA);
+  WiFi.begin(ssid, pass);
+  dht.setup(D1, DHTesp::DHT22);
   SERIAL_BEGIN(115200);
   PRINTLN();
   String thisBoard = ARDUINO_BOARD;
   PRINTLN(thisBoard);
-
-  // Wait for DHT22 to power up.
-  delay(2000);
-
-  dht.setup(D1, DHTesp::DHT22);
+}
 
 void loop()
 {
   while (true)
   {
-
-    auto dhtReading = dht.getTempAndHumidity();
-    auto dhtStatus = dht.getStatus();
+    WiFi.forceSleepWake();
+      WiFi.mode(WiFiMode_t::WIFI_STA);
+    if (!gotDhtReading)
+    {
+      dhtReading = dht.getTempAndHumidity();
+      dhtStatus = dht.getStatus();
+    }
 
     const auto temperatureF = dht.toFahrenheit(dhtReading.temperature);
     const auto humidity = dhtReading.humidity;
@@ -135,11 +131,13 @@ void loop()
     {
       PRINTLN(dht.getStatusString());
       //Try again however DHT22 needs 2 seconds between reads
+      WiFi.forceSleepBegin();
       delay(2000);
       continue;
     }
     else
     {
+      gotDhtReading = true;
       PRINTLN("DHT reading OK");
       PRINTF("Temperature(F): %.1f\tHumidity: %.1f\tHeat Index: %.1f\n",
              temperatureF, humidity, heatIndex);
