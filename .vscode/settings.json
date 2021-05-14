@@ -6,6 +6,11 @@
         "limits": "cpp",
         "cmath": "cpp",
         "vector": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "array": "cpp",
+        "deque": "cpp",
+        "list": "cpp",
+        "unordered_map": "cpp",
+        "initializer_list": "cpp"
     }
 }

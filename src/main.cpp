@@ -17,7 +17,6 @@
 #define PRINTF(...)
 #endif
 
-
 DHTesp dht;
 
 const char ssid[] = SECRET_SSID; //  your network SSID (name)
@@ -40,7 +39,8 @@ static const char alphanum[] = "0123456789"
 unsigned long lastCycleTime = 0;
 #define SECONDS_TO_MILLISECONDS(x) x * 1000L
 #define SECONDS_TO_MICROSECONDS(x) x * 1000000L
-#define PERIOD_TIME_SECONDS 60
+#define PERIOD_TIME_SECONDS 20
+#define EXECUTION_TIME 1
 const unsigned long PERIOD_TIME_MS = SECONDS_TO_MILLISECONDS(PERIOD_TIME_SECONDS);
 const unsigned long PERIOD_TIME_US = SECONDS_TO_MICROSECONDS(PERIOD_TIME_SECONDS);
 
@@ -117,87 +117,44 @@ void setup()
 
   dht.setup(D1, DHTesp::DHT22);
 
-  PRINTLN("Testing");
-  //Test connection
-  WiFi.mode(WiFiMode_t::WIFI_STA);
-  WiFi.begin(ssid, pass);
-  waitWhileConnecting();
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    PRINTLN("Wifi: OK");
-  } 
-  else
-  {
-    PRINTLN("Wifi: Error");
-  }
-  
-  //Test reading DHT
-  auto dhtReading = dht.getTempAndHumidity();
-  auto dhtStatus = dht.getStatus();
-  
-  if (dhtStatus == DHTesp::DHT_ERROR_t::ERROR_NONE)
-  {
-    PRINTF("DHT: OK (%.2f,%.2f)", dhtReading.temperature, dhtReading.humidity);
-  } 
-  else
-  {
-    PRINTF("DHT: ERROR (%d)\n",dhtStatus);
-  }
-  
-  //Test thingspeak
-  if (!mqttClient.connected())
-  {
-    if (!reconnect())
-    {
-      //Unable to reconnect to mqtt server. Retry from begining.
-      PRINTLN("Unable to reconnect to mqtt server.");
-    }
-  }
-
-  const auto temperatureF = dht.toFahrenheit(dhtReading.temperature);
-  const auto humidity = dhtReading.humidity;
-  const auto heatIndex = dht.computeHeatIndex(temperatureF, humidity, true);
-
-  if (!publishReadings(temperatureF, humidity, heatIndex))
-  {
-    PRINTLN("Unable to publish readings.");
-  }
-  else
-  {
-    PRINTLN("MQTT publish: OK");
-  }
-  
-  
-  delay(2000);
-}
-
-
 void loop()
 {
   while (true)
   {
-    // Wait for next update cycle.
-    auto timeDifference = millis() - lastCycleTime;
-    if (timeDifference < PERIOD_TIME_MS)
+
+    auto dhtReading = dht.getTempAndHumidity();
+    auto dhtStatus = dht.getStatus();
+
+    const auto temperatureF = dht.toFahrenheit(dhtReading.temperature);
+    const auto humidity = dhtReading.humidity;
+    const auto heatIndex = dht.computeHeatIndex(temperatureF, humidity, true);
+
+    if (dhtStatus != DHTesp::DHT_ERROR_t::ERROR_NONE)
     {
-      PRINT(".");
-      auto wait = max(1000UL, (PERIOD_TIME_MS - timeDifference) * 9 / 10);
-      delay(wait);
+      PRINTLN(dht.getStatusString());
+      //Try again however DHT22 needs 2 seconds between reads
+      delay(2000);
       continue;
     }
+    else
+    {
+      PRINTLN("DHT reading OK");
+      PRINTF("Temperature(F): %.1f\tHumidity: %.1f\tHeat Index: %.1f\n",
+             temperatureF, humidity, heatIndex);
+    }
 
-    WiFi.forceSleepWake();
 
     auto wifiStatus = WiFi.status();
     for (int retry = 0; retry < 5; retry++)
     {
       PRINT("-");
       WiFi.mode(WiFiMode_t::WIFI_STA);
-      WiFi.begin();
+      WiFi.begin(ssid, pass);
       waitWhileConnecting();
       wifiStatus = WiFi.status();
       if (wifiStatus == WL_CONNECTED)
       {
+        PRINTLN("Wifi connected");
         break;
       }
       delay(1000);
@@ -209,22 +166,6 @@ void loop()
       delay(2000);
       continue;
     }
-
-    lastCycleTime = millis();
-    auto dhtReading = dht.getTempAndHumidity();
-    auto dhtStatus = dht.getStatus();
-
-    if (dhtStatus != DHTesp::DHT_ERROR_t::ERROR_NONE)
-    {
-      PRINTLN(dht.getStatusString());
-      //Try again however DHT22 needs 2 seconds between reads
-      delay(2000);
-      continue;
-    }
-
-    const auto temperatureF = dht.toFahrenheit(dhtReading.temperature);
-    const auto humidity = dhtReading.humidity;
-    const auto heatIndex = dht.computeHeatIndex(temperatureF, humidity, true);
 
     if (!mqttClient.connected())
     {
@@ -242,14 +183,14 @@ void loop()
     }
     else
     {
-      PRINTF("Temperature(F): %.1f\tHumidity: %.1f\tHeat Index: %.1f\n",
-                    temperatureF, humidity, heatIndex);
+      PRINTLN("Uploaded readings");
     }
 
-    // WiFi.mode(WiFiMode_t::WIFI_OFF);
-    if (!WiFi.forceSleepBegin())
-    {
-      PRINTLN("Force sleep failed");
-    }
+    PRINTLN("Going to deep sleep");
+    ESP.deepSleep(PERIOD_TIME_US, WAKE_RF_DEFAULT);
+    // ESP.deepSleep(PERIOD_TIME_US, WAKE_RFCAL);
+    // ESP.deepSleep(PERIOD_TIME_US, WAKE_NO_RFCAL);
+    // ESP.deepSleep(PERIOD_TIME_US, WAKE_RF_DISABLED);
+    PRINTLN("Force sleep failed");
   }
 }
