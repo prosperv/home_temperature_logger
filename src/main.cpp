@@ -49,6 +49,10 @@ bool gotDhtReading = false;
 const unsigned long PERIOD_TIME_MS = SECONDS_TO_MILLISECONDS(PERIOD_TIME_SECONDS);
 const unsigned long PERIOD_TIME_US = SECONDS_TO_MICROSECONDS(PERIOD_TIME_SECONDS);
 
+// Testing average current consumption set period time to 10 seconds
+// Record with the lower range of average from dmm
+// Best average so far. 27.5 mA with debug on, 
+
 bool reconnect()
 {
   bool ret = false;
@@ -101,22 +105,23 @@ bool publishReadings(const float &temperatureF, const float &humdity, const floa
 
 void setup()
 {
-  WiFi.persistent(false); // don't store the connection each time to save wear on the flash
-  WiFi.mode(WiFiMode_t::WIFI_STA);
-  WiFi.begin(ssid, pass);
-  dht.setup(D1, DHTesp::DHT22);
   SERIAL_BEGIN(115200);
   PRINTLN();
   String thisBoard = ARDUINO_BOARD;
   PRINTLN(thisBoard);
+
+  WiFi.persistent(false); // don't store the connection each time to save wear on the flash
+  WiFi.mode(WiFiMode_t::WIFI_STA);
+  WiFi.begin(ssid, pass);
+
+  dht.setup(D1, DHTesp::DHT22);
+  delay(2500); 
 }
 
 void loop()
 {
   while (true)
   {
-    WiFi.forceSleepWake();
-      WiFi.mode(WiFiMode_t::WIFI_STA);
     if (!gotDhtReading)
     {
       dhtReading = dht.getTempAndHumidity();
@@ -129,10 +134,9 @@ void loop()
 
     if (dhtStatus != DHTesp::DHT_ERROR_t::ERROR_NONE)
     {
-      PRINTLN(dht.getStatusString());
+      PRINTF("Error read DHT22: %s \n\r",dht.getStatusString());
       //Try again however DHT22 needs 2 seconds between reads
-      WiFi.forceSleepBegin();
-      delay(2000);
+      delay(2500);
       continue;
     }
     else
@@ -143,26 +147,20 @@ void loop()
              temperatureF, humidity, heatIndex);
     }
 
-
     auto wifiStatus = WiFi.status();
     for (int retry = 0; retry < 5; retry++)
     {
       PRINT("-");
-      WiFi.mode(WiFiMode_t::WIFI_STA);
-      WiFi.begin(ssid, pass);
-      waitWhileConnecting();
-      wifiStatus = WiFi.status();
       if (wifiStatus == WL_CONNECTED)
       {
         PRINTLN("Wifi connected");
         break;
       }
-      delay(1000);
+      wifiStatus = static_cast<wl_status_t>(WiFi.waitForConnectResult(5000));
     }
     if (wifiStatus != WL_CONNECTED)
     {
       PRINTF("Failed to connect to wifi: %d\n", (int)wifiStatus);
-      WiFi.forceSleepBegin();
       delay(2000);
       continue;
     }
@@ -188,6 +186,12 @@ void loop()
 
     PRINTLN("Going to deep sleep");
     PRINTF("Execution time: %d \n", millis() - startTime);
+    ESP.deepSleep(PERIOD_TIME_US, WAKE_RF_DEFAULT); // Avg 28.7 mA
+    // ESP.deepSleepInstant(PERIOD_TIME_US, WAKE_RF_DEFAULT); // Avg 32.9 mA
+    
+    // WAKE_RF_DISABLED has issue with turning RF back on
+    // ESP.deepSleep(PERIOD_TIME_US, WAKE_RF_DISABLED);  // Avg  mA
+    // ESP.deepSleepInstant(PERIOD_TIME_US, WAKE_RF_DISABLED);
     PRINTLN("Force sleep failed");
   }
 }
