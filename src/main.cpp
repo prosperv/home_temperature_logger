@@ -17,6 +17,8 @@
 #define PRINTF(...)
 #endif
 
+auto startTime = millis();
+
 DHTesp dht;
 
 const char ssid[] = SECRET_SSID; //  your network SSID (name)
@@ -187,10 +189,7 @@ void loop()
     }
 
     PRINTLN("Going to deep sleep");
-    ESP.deepSleep(PERIOD_TIME_US, WAKE_RF_DEFAULT);
-    // ESP.deepSleep(PERIOD_TIME_US, WAKE_RFCAL);
-    // ESP.deepSleep(PERIOD_TIME_US, WAKE_NO_RFCAL);
-    // ESP.deepSleep(PERIOD_TIME_US, WAKE_RF_DISABLED);
+    PRINTF("Execution time: %d \n", millis() - startTime);
     PRINTLN("Force sleep failed");
   }
 }
