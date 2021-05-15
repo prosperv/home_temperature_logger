@@ -5,6 +5,7 @@
 #include <PubSubClient.h>
 #include "secrets.h"
 
+// #define DEBUG
 #ifdef DEBUG
 #define SERIAL_BEGIN(x) Serial.begin(x)
 #define PRINT(x) Serial.print(x)
@@ -44,15 +45,14 @@ bool gotDhtReading = false;
 
 #define SECONDS_TO_MILLISECONDS(x) x * 1000L
 #define SECONDS_TO_MICROSECONDS(x) x * 1000000L
-#define PERIOD_TIME_SECONDS 20
-#define EXECUTION_TIME 1
+#define PERIOD_TIME_SECONDS 60
 const unsigned long PERIOD_TIME_MS = SECONDS_TO_MILLISECONDS(PERIOD_TIME_SECONDS);
 const unsigned long PERIOD_TIME_US = SECONDS_TO_MICROSECONDS(PERIOD_TIME_SECONDS);
 
 // Testing average current consumption set period time to 10 seconds
 // Record with the lower range of average from dmm
-// Best average so far. 27.5 mA with debug on, 
-
+// Best average so far. 23.3 mA with debug on, 
+// Best execution time 4230 ms.
 bool reconnect()
 {
   bool ret = false;
@@ -110,12 +110,12 @@ void setup()
   String thisBoard = ARDUINO_BOARD;
   PRINTLN(thisBoard);
 
+  dht.setup(D1, DHTesp::DHT22);
   WiFi.persistent(false); // don't store the connection each time to save wear on the flash
   WiFi.mode(WiFiMode_t::WIFI_STA);
   WiFi.begin(ssid, pass);
 
-  dht.setup(D1, DHTesp::DHT22);
-  delay(2500); 
+  delay(2300); 
 }
 
 void loop()
@@ -136,7 +136,7 @@ void loop()
     {
       PRINTF("Error read DHT22: %s \n\r",dht.getStatusString());
       //Try again however DHT22 needs 2 seconds between reads
-      delay(2500);
+      delay(2300);
       continue;
     }
     else
@@ -185,9 +185,9 @@ void loop()
     }
 
     PRINTLN("Going to deep sleep");
-    PRINTF("Execution time: %d \n", millis() - startTime);
-    ESP.deepSleep(PERIOD_TIME_US, WAKE_RF_DEFAULT); // Avg 28.7 mA
-    // ESP.deepSleepInstant(PERIOD_TIME_US, WAKE_RF_DEFAULT); // Avg 32.9 mA
+    PRINTF("Execution time: %d ms \n", millis() - startTime);
+    ESP.deepSleep(PERIOD_TIME_US, WAKE_RF_DEFAULT); // Avg 26.4 mA
+    // ESP.deepSleepInstant(PERIOD_TIME_US, WAKE_RF_DEFAULT); // Avg 27.2 mA
     
     // WAKE_RF_DISABLED has issue with turning RF back on
     // ESP.deepSleep(PERIOD_TIME_US, WAKE_RF_DISABLED);  // Avg  mA
